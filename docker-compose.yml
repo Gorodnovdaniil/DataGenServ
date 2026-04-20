@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  datagen:
+    build: .
+    container_name: datagen-app
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./database.db:/app/database.db
+      - ./knowledge:/app/knowledge:ro
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+    restart: unless-stopped
