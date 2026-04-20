@@ -1,5 +1,5 @@
 """
-app.py - Frontend приложение VibeData на Streamlit.
+app.py - Frontend приложение DataGen на Streamlit.
 
 Интерфейс для генерации синтетических данных на основе имитационного моделирования.
 """
@@ -16,13 +16,13 @@ from backend.rag_engine import rag_engine
 
 # Настройка страницы
 st.set_page_config(
-    page_title="VibeData - Генератор синтетических данных",
+    page_title="DataGen - Генератор синтетических данных",
     page_icon="📊",
     layout="wide"
 )
 
 # Заголовок
-st.title("📊 VibeData")
+st.title("📊 DataGen")
 st.markdown("**Система генерации синтетических данных на основе имитационного моделирования**")
 
 # Боковая панель
@@ -174,7 +174,7 @@ if generate_btn or 'last_result' in st.session_state:
             st.download_button(
                 label="📥 Скачать CSV",
                 data=csv,
-                file_name=f"vibedata_{selected_dist_id}_{sample_size}.csv",
+                file_name=f"datagen_{selected_dist_id}_{sample_size}.csv",
                 mime="text/csv"
             )
         
@@ -204,7 +204,7 @@ st.markdown("---")
 st.markdown(
     """
     <div style='text-align: center; color: gray;'>
-        <p>VibeData © 2024 | Генерация синтетических данных методами имитационного моделирования</p>
+        <p>DataGen © 2024 | Генерация синтетических данных методами имитационного моделирования</p>
     </div>
     """,
     unsafe_allow_html=True

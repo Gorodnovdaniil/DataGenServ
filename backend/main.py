@@ -17,8 +17,8 @@ import json
 from backend.generator import DistributionGenerator, get_available_distributions
 
 
-class VibeDataOrchestrator:
-    """Основной класс оркестратора системы VibeData."""
+class DataGenOrchestrator:
+    """Основной класс оркестратора системы DataGen."""
 
     def __init__(self, db_path: str = "database.db"):
         """
@@ -297,7 +297,7 @@ class VibeDataOrchestrator:
 
 
 # Глобальный экземпляр оркестратора
-orchestrator = VibeDataOrchestrator()
+orchestrator = DataGenOrchestrator()
 
 
 # Пример использования
