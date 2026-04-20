@@ -2,4 +2,6 @@ streamlit
 streamlit-authenticator
 pandas
 numpy
+scipy
+llama-index
 openai
