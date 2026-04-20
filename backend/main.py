@@ -131,7 +131,7 @@ class DataGenOrchestrator:
                 "distribution": distribution,
                 "parameters": result_params,
                 "sample_size": n,
-                "data": data[:100],  # Возвращаем первые 100 значений для UI
+                "data": data,  # Возвращаем все сгенерированные значения
                 "full_data_count": len(data),
                 "statistics": stats,
                 "timestamp": datetime.now().isoformat()
