@@ -1,8 +1,9 @@
 """
-main.py - Оркестратор бизнес-логики backend.
+main.py - Оркестратор бизнес-логики backend и API-сервер.
 
 Этот модуль предоставляет единый интерфейс для frontend и других компонентов системы.
 Он координирует работу генератора распределений, RAG-движка и базы данных.
+Также предоставляет FastAPI эндпоинты для интеграции с внешними системами (n8n и др.).
 """
 
 import sys
@@ -13,8 +14,33 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 import sqlite3
 import json
+import io
+import csv
+
+from fastapi import FastAPI, HTTPException, Response, Body
+from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field, validator
+import uvicorn
 
 from backend.generator import DistributionGenerator, get_available_distributions
+
+
+# Инициализация FastAPI приложения
+app = FastAPI(
+    title="DataGen API",
+    description="API для генерации синтетических данных с различными распределениями",
+    version="1.0.0"
+)
+
+# Добавляем CORS middleware для доступа из внешних систем
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class DataGenOrchestrator:
@@ -300,7 +326,183 @@ class DataGenOrchestrator:
 orchestrator = DataGenOrchestrator()
 
 
-# Пример использования
+# ==========================================
+# Pydantic модели для валидации входящих данных
+# ==========================================
+
+class GenerateRequest(BaseModel):
+    """Модель запроса для генерации данных."""
+    distribution: str = Field(..., description="Тип распределения (uniform, exponential, gamma, normal, poisson, triangular)")
+    params: Dict[str, Any] = Field(default_factory=dict, description="Параметры распределения")
+    n_samples: int = Field(default=100, ge=1, le=100000, description="Количество образцов для генерации")
+    
+    @validator('distribution')
+    def validate_distribution(cls, v):
+        allowed_distributions = ['uniform', 'exponential', 'gamma', 'normal', 'poisson', 'triangular']
+        if v not in allowed_distributions:
+            raise ValueError(f"Недопустимый тип распределения. Разрешены: {', '.join(allowed_distributions)}")
+        return v
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "distribution": "gamma",
+                "params": {"alpha": 2.0, "beta": 1.0},
+                "n_samples": 1000
+            }
+        }
+
+
+# ==========================================
+# FastAPI эндпоинты для интеграции с n8n и другими системами
+# ==========================================
+
+@app.get("/")
+async def root():
+    """Корневой эндпоинт API."""
+    return {
+        "message": "DataGen API v1.0.0",
+        "docs": "/docs",
+        "endpoints": {
+            "generate": "/generate",
+            "distributions": "/distributions",
+            "distribution_info": "/distribution/{name}"
+        }
+    }
+
+
+@app.post("/generate")
+async def generate_data_endpoint(request: GenerateRequest):
+    """
+    Генерация синтетических данных указанного распределения.
+    
+    Принимает JSON с параметрами:
+    - distribution: тип распределения (uniform, exponential, gamma, normal, poisson, triangular)
+    - params: параметры распределения (зависят от типа)
+    - n_samples: количество образцов для генерации
+    
+    Примеры параметров для разных распределений:
+    - uniform: {"a": 0.0, "b": 1.0}
+    - exponential: {"lambda": 1.0}
+    - gamma: {"alpha": 2.0, "beta": 1.0}
+    - normal: {"mu": 0.0, "sigma": 1.0}
+    - poisson: {"lambda": 3.0}
+    - triangular: {"a": 0.0, "b": 1.0, "c": 0.5}
+    
+    Возвращает CSV файл для скачивания через StreamingResponse.
+    """
+    try:
+        # Генерация данных через оркестратор
+        result = orchestrator.generate_data(
+            distribution=request.distribution,
+            n=request.n_samples,
+            params=request.params,
+            seed=None
+        )
+        
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result.get("error", "Ошибка генерации"))
+        
+        # Создаем CSV в памяти
+        output = io.BytesIO()
+        writer = csv.writer(output)
+        
+        # Заголовок
+        writer.writerow(["index", "value"])
+        
+        # Данные
+        for i, value in enumerate(result["data"]):
+            writer.writerow([i, value])
+        
+        output.seek(0)
+        
+        # Возвращаем как StreamingResponse
+        return StreamingResponse(
+            output,
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f'attachment; filename="datagen_{request.distribution}_{request.n_samples}.csv"'
+            }
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Внутренняя ошибка сервера: {str(e)}")
+
+
+@app.post("/generate/json")
+async def generate_data_json(request: GenerateRequest):
+    """
+    Генерация синтетических данных в JSON формате.
+    
+    Принимает те же параметры, что и /generate, но возвращает JSON вместо CSV.
+    Удобно для интеграции с системами, которые не поддерживают загрузку файлов.
+    """
+    try:
+        # Генерация данных через оркестратор
+        result = orchestrator.generate_data(
+            distribution=request.distribution,
+            n=request.n_samples,
+            params=request.params,
+            seed=None
+        )
+        
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result.get("error", "Ошибка генерации"))
+        
+        return {
+            "success": True,
+            "distribution": result["distribution"],
+            "parameters": result["parameters"],
+            "sample_size": result["sample_size"],
+            "statistics": result["statistics"],
+            "data_count": result["full_data_count"],
+            "data": result["data"],
+            "timestamp": result["timestamp"]
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Внутренняя ошибка сервера: {str(e)}")
+
+
+@app.get("/distributions")
+async def get_distributions():
+    """Получение списка всех доступных распределений."""
+    return {
+        "distributions": orchestrator.get_all_distributions()
+    }
+
+
+@app.get("/distribution/{name}")
+async def get_distribution_info(name: str):
+    """Получение подробной информации о конкретном распределении."""
+    info = orchestrator.get_distribution_info(name)
+    if "error" in info:
+        raise HTTPException(status_code=404, detail=info["error"])
+    return info
+
+
+# ==========================================
+# Запуск сервера при прямом запуске модуля
+# ==========================================
+
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="DataGen API Server")
+    parser.add_argument("--host", default="0.0.0.0", help="Host to bind")
+    parser.add_argument("--port", type=int, default=8000, help="Port to bind")
+    parser.add_argument("--reload", action="store_true", help="Enable auto-reload")
+    args = parser.parse_args()
+    
+    print(f"Запуск DataGen API сервера на {args.host}:{args.port}")
+    uvicorn.run(app, host=args.host, port=args.port, reload=args.reload)
+
+
+# Пример использования (только если не запускаем как сервер)
 if __name__ == "__main__":
     print("=== Тестирование оркестратора ===\n")
 
