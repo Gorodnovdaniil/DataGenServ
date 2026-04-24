@@ -11,7 +11,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 import pandas as pd
 from backend.main import orchestrator
-from backend.rag_engine import rag_engine
 
 
 # Настройка страницы
@@ -50,17 +49,19 @@ with st.sidebar:
     
     st.divider()
     
-    # Информация о распределении
-    dist_info = orchestrator.get_distribution_info(selected_dist_id)
-    with st.expander("ℹ️ О распределении"):
-        st.write(f"**{dist_info.get('name', selected_dist_id)}**")
-        st.write(dist_info.get('description', ''))
-        st.latex(dist_info.get('formula', ''))
-        
-        if 'parameters' in dist_info:
-            st.write("**Параметры:**")
-            for param_name, param_info in dist_info['parameters'].items():
-                st.write(f"- `{param_name}`: {param_info.get('description', '')} (по умолчанию: {param_info.get('default', 'N/A')})")
+    # Кнопка ИИ ассистента
+    st.markdown(
+        """
+        <div style="text-align: center; margin: 10px 0;">
+            <a href="https://t.me/datagenserv_bot" target="_blank" style="text-decoration: none;">
+                <div style="background-color: #0088cc; color: white; padding: 12px; border-radius: 8px; font-weight: bold; display: inline-block; width: 100%;">
+                    🤖 ИИ ассистент, специалист по имитационному моделированию
+                </div>
+            </a>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 # Основная область
 col1, col2 = st.columns([2, 1])
@@ -182,22 +183,6 @@ if generate_btn or 'last_result' in st.session_state:
         st.subheader("📊 Визуализация")
         chart_data = pd.DataFrame({"Значения": data})
         st.bar_chart(chart_data)
-
-# RAG поиск по лекциям
-st.divider()
-st.subheader("📚 Поиск в лекциях")
-
-with st.expander("🔍 Поиск теории по имитационному моделированию"):
-    query = st.text_input("Введите запрос (например, 'метод обратных функций'):")
-    
-    if query:
-        results = rag_engine.search(query, top_k=3)
-        
-        for i, res in enumerate(results, 1):
-            with st.container():
-                st.markdown(f"**{i}.** {res['text']}")
-                st.caption(f"📄 {res['source']}, стр. {res['page']} | Релевантность: {res['relevance_score']:.2f}")
-                st.divider()
 
 # Футер
 st.markdown("---")
