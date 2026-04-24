@@ -28,6 +28,8 @@ st.markdown("**Система генерации синтетических да
 # Боковая панель
 with st.sidebar:
     st.header("⚙️ Настройки")
+	
+    st.link_button("🤖 ИИ ассистент", "https://t.me/datagenserv_bot", use_container_width=True, type="primary")
     
     # Выбор распределения
     distributions = orchestrator.get_all_distributions()
